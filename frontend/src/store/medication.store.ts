@@ -1,176 +1,178 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Medication, MedicationLog } from '../types/medication.types';
+import medicationApi from '../api/medication.api';
 import useTimelineStore from './timeline.store';
+import useSyncStore from './sync.store';
+import useFamilyStore from './family.store';
+import notificationService from '../services/notification.service';
 
 interface MedicationActions {
-  addMedication: (med: Omit<Medication, 'id' | 'createdAt'>) => void;
-  updateMedication: (id: string, updates: Partial<Medication>) => void;
-  deleteMedication: (id: string) => void;
-  toggleTaken: (medicationId: string, timeSlot: string, checkedBy: string) => void;
+  fetchMedications: () => Promise<void>;
+  fetchLogs: (dateStr?: string) => Promise<void>;
+  addMedication: (med: Omit<Medication, 'id' | 'createdAt'>) => Promise<void>;
+  updateMedication: (id: string, updates: Partial<Medication>) => Promise<void>;
+  deleteMedication: (id: string) => Promise<void>;
+  toggleTaken: (medicationId: string, timeSlot: string, checkedBy: string, dateStr?: string) => Promise<void>;
   getLogsForDate: (dateStr: string) => MedicationLog[];
 }
-
-const MOCK_MEDICATIONS: Medication[] = [
-  {
-    id: 'med-metformin',
-    memberId: 'member-grandpa',
-    name: 'Metformin 500mg (Trị tiểu đường)',
-    dosage: '1 viên',
-    frequency: 'daily',
-    schedule: ['08:00', '20:00'],
-    notes: 'Uống ngay sau khi ăn sáng và ăn tối no. Không uống khi đói.',
-    active: true,
-    voiceNoteUrl: 'mock-audio-metformin-123',
-    voiceDuration: 8,
-    createdAt: '2026-05-15T08:00:00Z',
-  },
-  {
-    id: 'med-amlodipine',
-    memberId: 'member-grandpa',
-    name: 'Amlodipine 5mg (Huyết áp)',
-    dosage: '1 viên',
-    frequency: 'daily',
-    schedule: ['08:00'],
-    notes: 'Uống vào buổi sáng sau thức dậy.',
-    active: true,
-    voiceNoteUrl: 'mock-audio-amlodipine-456',
-    voiceDuration: 5,
-    createdAt: '2026-05-15T08:00:00Z',
-  },
-  {
-    id: 'med-ventolin',
-    memberId: 'member-daughter',
-    name: 'Ventolin Inhaler 100mcg (Xịt hen)',
-    dosage: 'Xịt 1 nhát',
-    frequency: 'custom',
-    schedule: ['Khi khò khè / Khó thở'],
-    notes: 'Lắc kỹ trước khi xịt, súc miệng lại bằng nước ấm sau xịt.',
-    active: true,
-    createdAt: '2026-05-20T10:00:00Z',
-  },
-  {
-    id: 'med-colchicine',
-    memberId: 'member-father',
-    name: 'Colchicine 1mg (Gout)',
-    dosage: '1 viên',
-    frequency: 'daily',
-    schedule: ['20:00'],
-    notes: 'Uống buổi tối sau ăn.',
-    active: true,
-    createdAt: '2026-05-25T12:00:00Z',
-  }
-];
-
-// Seed initial logs for today (morning medicine taken, evening pending)
-const getTodayDateString = () => new Date().toISOString().split('T')[0];
-
-const INITIAL_LOGS: MedicationLog[] = [
-  {
-    id: 'log-metformin-morning',
-    medicationId: 'med-metformin',
-    memberId: 'member-grandpa',
-    checkedBy: 'Lê Hoàng Lan (Con gái)',
-    status: 'taken',
-    takenAt: `${getTodayDateString()}T08:05:00Z`
-  },
-  {
-    id: 'log-amlodipine-morning',
-    medicationId: 'med-amlodipine',
-    memberId: 'member-grandpa',
-    checkedBy: 'Lê Hoàng Lan (Con gái)',
-    status: 'taken',
-    takenAt: `${getTodayDateString()}T08:06:00Z`
-  }
-];
 
 interface MedicationState {
   medications: Medication[];
   logs: MedicationLog[];
 }
 
-export const useMedicationStore = create<MedicationState & MedicationActions>((set, get) => ({
-  medications: MOCK_MEDICATIONS,
-  logs: INITIAL_LOGS,
-  
-  addMedication: (medData) => set((state) => ({
-    medications: [
-      ...state.medications,
-      {
-        ...medData,
-        id: `med-${Date.now()}`,
-        createdAt: new Date().toISOString(),
+export const useMedicationStore = create<MedicationState & MedicationActions>()(
+  persist(
+    (set, get) => ({
+      medications: [],
+      logs: [],
+      
+      fetchMedications: async () => {
+        try {
+          const res = await medicationApi.getMedications();
+          if (res.status === 'success' && res.data) {
+            // Map _id from backend to id for frontend compatibility
+            const mapped = res.data.medications.map((m: any) => ({
+              ...m,
+              id: m._id
+            }));
+            set({ medications: mapped });
+            // Reschedule local reminders
+            notificationService.scheduleAllMedicationReminders(mapped, useFamilyStore.getState().members).catch(() => {});
+          }
+        } catch (err) {
+          console.log('[Medication Store] Fetch medications failed (offline mode). Using cached state.', err);
+        }
+      },
+
+      fetchLogs: async (dateStr) => {
+        try {
+          const res = await medicationApi.getLogs(dateStr);
+          if (res.status === 'success' && res.data) {
+            const mapped = res.data.logs.map((l: any) => ({
+              ...l,
+              id: l._id
+            }));
+            set({ logs: mapped });
+          }
+        } catch (err) {
+          console.log('[Medication Store] Fetch logs failed (offline mode). Using cached state.', err);
+        }
+      },
+
+      addMedication: async (medData) => {
+        try {
+          const res = await medicationApi.createMedication(medData as any);
+          if (res.status === 'success') {
+            await get().fetchMedications();
+            useTimelineStore.getState().fetchActivities().catch(() => {});
+          }
+        } catch (err) {
+          console.warn('[Medication Store] Failed to save online. Queuing to sync offline...', err);
+          
+          // Add to offline sync queue
+          useSyncStore.getState().addToQueue('create_medication', medData);
+
+          // Optimistic UI Update: Add medication locally immediately
+          const mockMedId = `med-offline-${Date.now()}`;
+          const newMed: Medication = {
+            ...medData,
+            id: mockMedId,
+            createdAt: new Date().toISOString()
+          };
+          set((state) => {
+            const updated = [...state.medications, newMed];
+            // Reschedule local reminders for offline optimistic update
+            notificationService.scheduleAllMedicationReminders(updated, useFamilyStore.getState().members).catch(() => {});
+            return { medications: updated };
+          });
+        }
+      },
+      
+      updateMedication: async (id, updates) => {
+        try {
+          const res = await medicationApi.updateMedication(id, updates);
+          if (res.status === 'success') {
+            await get().fetchMedications();
+            useTimelineStore.getState().fetchActivities().catch(() => {});
+          }
+        } catch (err) {
+          console.error('[Medication Store] Update medication failed:', err);
+          throw err;
+        }
+      },
+      
+      deleteMedication: async (id) => {
+        try {
+          const res = await medicationApi.deleteMedication(id);
+          if (res.status === 'success') {
+            await get().fetchMedications();
+            useTimelineStore.getState().fetchActivities().catch(() => {});
+          }
+        } catch (err) {
+          console.error('[Medication Store] Delete medication failed:', err);
+          throw err;
+        }
+      },
+      
+      toggleTaken: async (medicationId, timeSlot, checkedBy, dateStr) => {
+        const todayStr = dateStr || new Date().toISOString().split('T')[0];
+        
+        try {
+          const res = await medicationApi.toggleLog(medicationId, 'taken', timeSlot, todayStr);
+          if (res.status === 'success') {
+            await get().fetchLogs(todayStr);
+            useTimelineStore.getState().fetchActivities().catch(() => {});
+          }
+        } catch (err) {
+          console.warn('[Medication Store] Toggle log online failed. Queuing for sync and updating UI optimistically...', err);
+          
+          // Add to offline sync queue
+          useSyncStore.getState().addToQueue('toggle_medication_log', {
+            medicationId,
+            status: 'taken',
+            timeSlot,
+            dateStr: todayStr
+          });
+
+          // Optimistic UI Update: Toggle confirmation logs state locally
+          const existingLog = get().logs.find(
+            (l) => l.medicationId === medicationId && l.takenAt.startsWith(todayStr)
+          );
+
+          if (existingLog) {
+            // Delete log locally
+            set((state) => ({
+              logs: state.logs.filter((l) => l.id !== existingLog.id)
+            }));
+          } else {
+            // Add log locally
+            const newLog: MedicationLog = {
+              id: `log-offline-${Date.now()}`,
+              medicationId,
+              memberId: get().medications.find(m => m.id === medicationId)?.memberId || '',
+              checkedBy,
+              status: 'taken',
+              takenAt: new Date().toISOString()
+            };
+            set((state) => ({
+              logs: [...state.logs, newLog]
+            }));
+          }
+        }
+      },
+      
+      getLogsForDate: (dateStr) => {
+        return get().logs.filter((l) => l.takenAt.startsWith(dateStr));
       }
-    ]
-  })),
-  
-  updateMedication: (id, updates) => set((state) => ({
-    medications: state.medications.map((m) => m.id === id ? { ...m, ...updates } : m)
-  })),
-  
-  deleteMedication: (id) => set((state) => ({
-    medications: state.medications.filter((m) => m.id !== id)
-  })),
-  
-  toggleTaken: (medicationId, timeSlot, checkedBy) => {
-    const today = getTodayDateString();
-    const existingLog = get().logs.find(
-      (l) => l.medicationId === medicationId && 
-             l.takenAt.startsWith(today) && 
-             (timeSlot === 'Khi khò khè / Khó thở' || new Date(l.takenAt).getUTCHours() === parseInt(timeSlot.split(':')[0]))
-    );
-
-    const med = get().medications.find(m => m.id === medicationId);
-    if (!med) return;
-
-    if (existingLog) {
-      // Toggle back to pending (delete the log)
-      set((state) => ({
-        logs: state.logs.filter((l) => l.id !== existingLog.id)
-      }));
-      
-      // Log to timeline
-      useTimelineStore.getState().addActivity({
-        familyId: 'fam-hanoi-99',
-        actorId: 'user-lan-123',
-        actorName: checkedBy,
-        type: 'medication_missed',
-        targetId: medicationId,
-        targetName: med.name,
-        subjectName: med.memberId === 'member-grandpa' ? 'Ông nội' : (med.memberId === 'member-daughter' ? 'Bé Út' : 'Papa'),
-        message: `${checkedBy} đã hủy đánh dấu uống thuốc ${med.name} của ${med.memberId === 'member-grandpa' ? 'Ông nội' : (med.memberId === 'member-daughter' ? 'Bé Út' : 'Papa')}`,
-      });
-    } else {
-      // Add taken log
-      const newLog: MedicationLog = {
-        id: `log-${Date.now()}`,
-        medicationId,
-        memberId: med.memberId,
-        checkedBy,
-        status: 'taken',
-        takenAt: new Date().toISOString()
-      };
-      
-      set((state) => ({
-        logs: [...state.logs, newLog]
-      }));
-
-      // Add to care activities timeline
-      useTimelineStore.getState().addActivity({
-        familyId: 'fam-hanoi-99',
-        actorId: 'user-lan-123',
-        actorName: checkedBy,
-        type: 'medication_taken',
-        targetId: medicationId,
-        targetName: med.name,
-        subjectName: med.memberId === 'member-grandpa' ? 'Ông nội' : (med.memberId === 'member-daughter' ? 'Bé Út' : 'Papa'),
-        message: `${checkedBy} đã xác nhận cho ${med.memberId === 'member-grandpa' ? 'Ông nội' : (med.memberId === 'member-daughter' ? 'Bé Út' : 'Papa')} uống ${med.name}`,
-      });
+    }),
+    {
+      name: 'kynn-medications-storage',
+      storage: createJSONStorage(() => AsyncStorage)
     }
-  },
-  
-  getLogsForDate: (dateStr) => {
-    return get().logs.filter((l) => l.takenAt.startsWith(dateStr));
-  }
-}));
+  )
+);
 
 export default useMedicationStore;

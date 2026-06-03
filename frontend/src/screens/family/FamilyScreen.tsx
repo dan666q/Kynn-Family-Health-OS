@@ -69,7 +69,7 @@ export const FamilyScreen = () => {
         {/* Member cards */}
         {members.map(member => (
           <MemberCard 
-            key={member.id} 
+            key={member.id || (member as any)._id} 
             member={member} 
             onPress={() => Alert.alert(
               `Hồ sơ: ${member.fullName}`, 
