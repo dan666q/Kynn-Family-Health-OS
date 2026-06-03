@@ -1,65 +1,15 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CareActivity, MedicalDocument } from '../types/timeline.types';
+import timelineApi from '../api/timeline.api';
 
 interface TimelineActions {
+  fetchActivities: () => Promise<void>;
   addActivity: (act: Omit<CareActivity, 'id' | 'createdAt'>) => void;
   addDocument: (doc: Omit<MedicalDocument, 'id' | 'createdAt'>) => void;
   deleteDocument: (id: string) => void;
 }
-
-const getTodayDateString = () => new Date().toISOString().split('T')[0];
-
-const MOCK_ACTIVITIES: CareActivity[] = [
-  {
-    id: 'act-1',
-    familyId: 'fam-hanoi-99',
-    actorId: 'user-lan-123',
-    actorName: 'Lê Hoàng Lan (Con gái)',
-    type: 'medication_taken',
-    targetId: 'med-amlodipine',
-    targetName: 'Amlodipine 5mg',
-    subjectName: 'Ông nội',
-    message: 'Lê Hoàng Lan (Con gái) đã xác nhận cho Ông nội uống Amlodipine 5mg',
-    createdAt: `${getTodayDateString()}T08:06:00Z`
-  },
-  {
-    id: 'act-2',
-    familyId: 'fam-hanoi-99',
-    actorId: 'user-lan-123',
-    actorName: 'Lê Hoàng Lan (Con gái)',
-    type: 'medication_taken',
-    targetId: 'med-metformin',
-    targetName: 'Metformin 500mg',
-    subjectName: 'Ông nội',
-    message: 'Lê Hoàng Lan (Con gái) đã xác nhận cho Ông nội uống Metformin 500mg',
-    createdAt: `${getTodayDateString()}T08:05:00Z`
-  },
-  {
-    id: 'act-3',
-    familyId: 'fam-hanoi-99',
-    actorId: 'user-lan-123',
-    actorName: 'Lê Hoàng Lan (Mẹ)',
-    type: 'voice_note_added',
-    targetId: 'med-metformin',
-    targetName: 'Metformin 500mg',
-    subjectName: 'Ông nội',
-    message: 'Lê Hoàng Lan đã ghi âm Hướng dẫn giọng nói cho thuốc Metformin 500mg',
-    metadata: { text: '“Thuốc trắng to tròn uống sau ăn sáng nha bố”' },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() // 1 day ago
-  },
-  {
-    id: 'act-4',
-    familyId: 'fam-hanoi-99',
-    actorId: 'user-lan-123',
-    actorName: 'Lê Hoàng Lan (Con gái)',
-    type: 'document_uploaded',
-    targetId: 'doc-presc-1',
-    targetName: 'Toa thuốc Tim mạch - BV Bạch Mai',
-    subjectName: 'Ông nội',
-    message: 'Lê Hoàng Lan đã tải lên tài liệu mới: Toa thuốc Tim mạch - BV Bạch Mai',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString() // 2 days ago
-  }
-];
 
 const MOCK_DOCUMENTS: MedicalDocument[] = [
   {
@@ -110,50 +60,79 @@ interface TimelineState {
   documents: MedicalDocument[];
 }
 
-export const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => ({
-  activities: MOCK_ACTIVITIES,
-  documents: MOCK_DOCUMENTS,
-  
-  addActivity: (act) => set((state) => ({
-    activities: [
-      {
-        ...act,
-        id: `act-${Date.now()}`,
-        createdAt: new Date().toISOString(),
+export const useTimelineStore = create<TimelineState & TimelineActions>()(
+  persist(
+    (set, get) => ({
+      activities: [],
+      documents: MOCK_DOCUMENTS,
+      
+      fetchActivities: async () => {
+        try {
+          const res = await timelineApi.getActivities();
+          if (res.status === 'success' && res.data) {
+            const mapped = res.data.activities.map((act: any) => ({
+              id: act._id,
+              familyId: act.familyId,
+              actorId: act.actorId?._id || act.actorId,
+              actorName: act.actorId?.name || 'Thành viên',
+              type: act.type,
+              targetId: act.targetId,
+              message: act.message,
+              createdAt: act.createdAt
+            }));
+            set({ activities: mapped });
+          }
+        } catch (err) {
+          console.log('[Timeline Store] Fetch activities failed (offline mode). Using cached state.', err);
+        }
       },
-      ...state.activities
-    ]
-  })),
-  
-  addDocument: (doc) => {
-    const docId = `doc-${Date.now()}`;
-    set((state) => ({
-      documents: [
-        {
-          ...doc,
-          id: docId,
-          createdAt: new Date().toISOString(),
-        },
-        ...state.documents
-      ]
-    }));
-    
-    // Also push to timeline
-    get().addActivity({
-      familyId: 'fam-hanoi-99',
-      actorId: 'user-lan-123',
-      actorName: doc.uploadedBy,
-      type: 'document_uploaded',
-      targetId: docId,
-      targetName: doc.fileName,
-      subjectName: doc.memberId === 'member-grandpa' ? 'Ông nội' : (doc.memberId === 'member-daughter' ? 'Bé Út' : 'Papa'),
-      message: `${doc.uploadedBy} đã tải lên tài liệu mới: ${doc.fileName}`,
-    });
-  },
-  
-  deleteDocument: (id) => set((state) => ({
-    documents: state.documents.filter((d) => d.id !== id)
-  }))
-}));
+
+      addActivity: (act) => set((state) => ({
+        activities: [
+          {
+            ...act,
+            id: `act-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+          },
+          ...state.activities
+        ]
+      })),
+      
+      addDocument: (doc) => {
+        const docId = `doc-${Date.now()}`;
+        set((state) => ({
+          documents: [
+            {
+              ...doc,
+              id: docId,
+              createdAt: new Date().toISOString(),
+            },
+            ...state.documents
+          ]
+        }));
+        
+        // Push to local timeline view immediately
+        get().addActivity({
+          familyId: 'current-family',
+          actorId: 'current-user',
+          actorName: doc.uploadedBy,
+          type: 'document_uploaded',
+          targetId: docId,
+          targetName: doc.fileName,
+          subjectName: doc.memberId === 'member-grandpa' ? 'Ông nội' : (doc.memberId === 'member-daughter' ? 'Bé Út' : 'Papa'),
+          message: `${doc.uploadedBy} đã tải lên tài liệu mới: ${doc.fileName}`,
+        });
+      },
+      
+      deleteDocument: (id) => set((state) => ({
+        documents: state.documents.filter((d) => d.id !== id)
+      }))
+    }),
+    {
+      name: 'kynn-timeline-storage',
+      storage: createJSONStorage(() => AsyncStorage)
+    }
+  )
+);
 
 export default useTimelineStore;
