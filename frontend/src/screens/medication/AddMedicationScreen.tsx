@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import COLORS from '../../constants/colors';
 import FONTS from '../../constants/fonts';
 import SPACING from '../../constants/spacing';
@@ -8,6 +9,7 @@ import { useMedicationStore } from '../../store/medication.store';
 import { useFamilyStore } from '../../store/family.store';
 import CustomInput from '../../components/common/CustomInput';
 import CustomButton from '../../components/common/CustomButton';
+import axiosInstance from '../../api/axios';
 
 export const AddMedicationScreen = ({ navigation }: any) => {
   const { addMedication } = useMedicationStore();
@@ -19,27 +21,87 @@ export const AddMedicationScreen = ({ navigation }: any) => {
   const [notes, setNotes] = useState('');
   const [scheduleTime, setScheduleTime] = useState('08:00');
   
-  // Voice Instruction simulation state
+  // Voice Instruction state
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceDuration, setVoiceDuration] = useState(0);
   const [recordedVoiceUrl, setRecordedVoiceUrl] = useState<string | undefined>(undefined);
   const [recordTimer, setRecordTimer] = useState<any>(null);
 
-  const handleStartRecord = () => {
-    if (isRecording) {
-      clearInterval(recordTimer);
+  const handleStartRecord = async () => {
+    try {
+      if (isRecording) {
+        // STOP RECORDING
+        setIsRecording(false);
+        clearInterval(recordTimer);
+        
+        if (recording) {
+          await recording.stopAndUnloadAsync();
+          const uri = recording.getURI();
+          setRecording(null);
+          
+          if (uri) {
+            const formData = new FormData();
+            formData.append('audio', {
+              uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+              type: 'audio/m4a',
+              name: `voice-${Date.now()}.m4a`,
+            } as any);
+            formData.append('duration', voiceDuration.toString());
+
+            try {
+              const res = await axiosInstance.post('/voice/upload', formData, {
+                headers: {
+                  'Content-Type': 'multipart/form-data',
+                },
+              });
+              if (res.data && res.data.status === 'success') {
+                setRecordedVoiceUrl(res.data.data.url);
+                Alert.alert('Thành công', `Đã lưu hướng dẫn thoại dài ${voiceDuration} giây.`);
+              } else {
+                throw new Error('Upload failed');
+              }
+            } catch (uploadErr) {
+              console.log('Upload failed, saving local URI for offline use', uploadErr);
+              setRecordedVoiceUrl(uri);
+              Alert.alert('Ngoại tuyến', `Đã lưu hướng dẫn thoại cục bộ (${voiceDuration} giây) do mất kết nối.`);
+            }
+          }
+        }
+      } else {
+        // START RECORDING
+        const permission = await Audio.requestPermissionsAsync();
+        if (permission.status !== 'granted') {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền truy cập Micro để ghi âm.');
+          return;
+        }
+
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
+        const newRecording = new Audio.Recording();
+        await newRecording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        await newRecording.startAsync();
+
+        setRecording(newRecording);
+        setIsRecording(true);
+        setVoiceDuration(0);
+
+        const timer = setInterval(() => {
+          setVoiceDuration((prev) => prev + 1);
+        }, 1000);
+        setRecordTimer(timer);
+      }
+    } catch (err) {
+      console.error('Recording error', err);
+      Alert.alert('Lỗi', 'Không thể ghi âm hoặc khởi động micro.');
       setIsRecording(false);
-      setRecordedVoiceUrl('mock-recorded-voice-url-' + Date.now());
-      Alert.alert('Ghi âm thành công', `Đã lưu hướng dẫn thoại dài ${voiceDuration} giây.`);
-    } else {
-      setVoiceDuration(0);
-      setIsRecording(true);
-      const timer = setInterval(() => {
-        setVoiceDuration(prev => prev + 1);
-      }, 1000);
-      setRecordTimer(timer);
+      if (recordTimer) clearInterval(recordTimer);
     }
   };
+
 
   const handleSave = () => {
     if (!name.trim()) {

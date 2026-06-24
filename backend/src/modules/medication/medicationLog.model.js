@@ -21,6 +21,10 @@ const medicationLogSchema = new mongoose.Schema({
     default: 'taken',
     required: true
   },
+  timeSlot: {
+    type: String,
+    required: [true, 'Time slot is required']
+  },
   takenAt: {
     type: Date,
     default: Date.now,

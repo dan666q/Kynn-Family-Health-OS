@@ -2,6 +2,14 @@ const Member = require('./member.model');
 const Medication = require('../medication/medication.model');
 const MedicationLog = require('../medication/medicationLog.model');
 const response = require('../../utils/response');
+const socketConfig = require('../../config/socket');
+
+const emitSocketEvent = (familyId, eventName, data) => {
+  const io = socketConfig.getIO();
+  if (io && familyId) {
+    io.to(familyId.toString()).emit(eventName, data);
+  }
+};
 
 // Get all members of the user's family
 exports.getMembers = async (req, res, next) => {
@@ -42,6 +50,9 @@ exports.createMember = async (req, res, next) => {
       avatar: avatar || ''
     });
 
+    emitSocketEvent(req.user.familyId, 'family_updated');
+    emitSocketEvent(req.user.familyId, 'timeline_updated');
+
     return response.success(res, { member }, 201);
   } catch (err) {
     next(err);
@@ -70,6 +81,9 @@ exports.updateMember = async (req, res, next) => {
     delete updates.familyId;
 
     const updatedMember = await Member.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+
+    emitSocketEvent(req.user.familyId, 'family_updated');
+    emitSocketEvent(req.user.familyId, 'timeline_updated');
 
     return response.success(res, { member: updatedMember });
   } catch (err) {
@@ -100,6 +114,9 @@ exports.deleteMember = async (req, res, next) => {
     
     // Delete associated medication logs
     await MedicationLog.deleteMany({ memberId: id });
+
+    emitSocketEvent(req.user.familyId, 'family_updated');
+    emitSocketEvent(req.user.familyId, 'timeline_updated');
 
     return response.success(res, { message: 'Member and all associated data deleted successfully.' });
   } catch (err) {

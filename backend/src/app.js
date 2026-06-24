@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 const errorMiddleware = require('./middleware/error.middleware');
 
 const app = express();
@@ -10,6 +11,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use(helmet());
+
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Simple request logger for debugging
 app.use((req, res, next) => {
@@ -28,8 +32,10 @@ app.use('/api/v1/family', require('./modules/family/family.routes'));
 app.use('/api/v1/members', require('./modules/member/member.routes'));
 app.use('/api/v1/medications', require('./modules/medication/medication.routes'));
 app.use('/api/v1/timeline', require('./modules/timeline/timeline.routes'));
+app.use('/api/v1/voice', require('./modules/voice/voice.routes'));
 
 // Global Error Handler
 app.use(errorMiddleware);
 
 module.exports = app;
+

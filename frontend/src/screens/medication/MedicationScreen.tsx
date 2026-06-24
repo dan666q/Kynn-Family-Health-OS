@@ -101,12 +101,12 @@ export const MedicationScreen = ({ navigation }: any) => {
                   const isTaken = logs.some(
                     l => l.medicationId === med.id && 
                          l.takenAt.startsWith(todayStr) && 
-                         (slot === 'Khi khò khè / Khó thở' || new Date(l.takenAt).getUTCHours() === parseInt(slot.split(':')[0]))
+                         l.timeSlot === slot
                   );
                   const log = logs.find(
                     l => l.medicationId === med.id && 
                          l.takenAt.startsWith(todayStr) && 
-                         (slot === 'Khi khò khè / Khó thở' || new Date(l.takenAt).getUTCHours() === parseInt(slot.split(':')[0]))
+                         l.timeSlot === slot
                   );
                   return (
                     <MedicationCard 

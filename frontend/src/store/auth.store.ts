@@ -83,10 +83,18 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       if (res.status === 'success' && res.data) {
         set({ user: res.data.user, isAuthenticated: true });
       }
-    } catch (err) {
-      console.warn('Session expired or invalid token', err);
-      delete axiosInstance.defaults.headers.common['Authorization'];
-      set({ user: null, token: null, isAuthenticated: false });
+    } catch (err: any) {
+      console.warn('[Auth Store] Session check failed:', err);
+      // Only clear credentials and logout if the server definitively rejects the token with 401 or 403
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        console.log('[Auth Store] Token is invalid or expired. Logging out.');
+        delete axiosInstance.defaults.headers.common['Authorization'];
+        set({ user: null, token: null, isAuthenticated: false });
+      } else {
+        // For network timeouts, connection refused, or 5xx server errors, we preserve the cached session
+        console.log('[Auth Store] Network error or server offline. Retaining cached local session.');
+        set({ isAuthenticated: true });
+      }
     }
   }
     }),

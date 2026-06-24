@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import COLORS from '../../constants/colors';
 import FONTS from '../../constants/fonts';
 import SPACING from '../../constants/spacing';
 import { Medication } from '../../types/medication.types';
+import axiosInstance from '../../api/axios';
 
 interface MedicationCardProps {
   medication: Medication;
@@ -22,15 +24,70 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({
   checkedBy,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  const handlePlayVoice = () => {
-    setIsPlaying(!isPlaying);
-    if (!isPlaying) {
-      setTimeout(() => {
+  const handlePlayVoice = async () => {
+    if (isPlaying) {
+      if (sound) {
+        try {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+        } catch (err) {
+          console.log('Unloading sound failed', err);
+        }
+        setSound(null);
+      }
+      setIsPlaying(false);
+    } else {
+      try {
+        setIsPlaying(true);
+        let playUrl = medication.voiceNoteUrl;
+        if (!playUrl) {
+          setIsPlaying(false);
+          return;
+        }
+        
+        // Resolve absolute URL for relative path uploads
+        if (playUrl.startsWith('/uploads')) {
+          const apiBaseUrl = axiosInstance.defaults.baseURL || '';
+          const serverBase = apiBaseUrl.replace('/api/v1', '');
+          playUrl = `${serverBase}${playUrl}`;
+        }
+        
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: playUrl },
+          { shouldPlay: true }
+        );
+        
+        setSound(newSound);
+        
+        newSound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setIsPlaying(false);
+            newSound.unloadAsync();
+            setSound(null);
+          }
+        });
+      } catch (error) {
+        console.warn('Voice playback failed', error);
         setIsPlaying(false);
-      }, (medication.voiceDuration || 5) * 1000);
+      }
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync().catch(() => {});
+      }
+    };
+  }, [sound]);
+
 
   return (
     <View style={[

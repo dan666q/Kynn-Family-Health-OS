@@ -206,18 +206,14 @@ exports.toggleMedicationLog = async (req, res, next) => {
     }
 
     // We check if a log already exists for this medication, this timeSlot, and this date.
-    // Date string defaults to today (local date split)
     const targetDateStr = dateStr || new Date().toISOString().split('T')[0];
     const startOfDay = new Date(`${targetDateStr}T00:00:00Z`);
     const endOfDay = new Date(`${targetDateStr}T23:59:59Z`);
 
-    // Find any existing log for this medicine and slot on this date
-    // Note: We match logs where takenAt falls within startOfDay and endOfDay, and metadata matches timeSlot (or check all)
-    // To make it easy, we store the timeSlot in the log's metadata or check matching
     const existingLog = await MedicationLog.findOne({
       medicationId,
+      timeSlot,
       takenAt: { $gte: startOfDay, $lte: endOfDay },
-      // Check metadata or simple match
     });
 
     const member = await Member.findById(medication.memberId);
@@ -246,6 +242,7 @@ exports.toggleMedicationLog = async (req, res, next) => {
         memberId: medication.memberId,
         checkedBy: `${req.user.name} (Con cháu)`,
         status,
+        timeSlot,
         takenAt: new Date()
       });
 

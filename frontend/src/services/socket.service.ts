@@ -22,7 +22,7 @@ export const socketService = {
     }
 
     // Connect to host machine IP address
-    const SOCKET_URL = 'http://192.168.2.11:5000';
+    const SOCKET_URL = 'http://192.168.2.4:5000';
     console.log(`[Socket Service] Connecting to Socket.IO server at: ${SOCKET_URL}`);
 
     socket = io(SOCKET_URL, {
@@ -46,6 +46,12 @@ export const socketService = {
       console.log('[Socket Event] Medication updated received. Re-fetching medications...');
       useMedicationStore.getState().fetchMedications().catch(() => {});
       useMedicationStore.getState().fetchLogs().catch(() => {});
+    });
+
+    // Listen for family changes
+    socket.on('family_updated', () => {
+      console.log('[Socket Event] Family updated received. Re-fetching family members...');
+      useFamilyStore.getState().fetchMembers().catch(() => {});
     });
 
     // Listen for timeline updates
