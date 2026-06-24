@@ -25,7 +25,9 @@ const activitySchema = new mongoose.Schema({
       'symptom_logged',
       'voice_added',
       'member_created',
-      'member_updated'
+      'member_updated',
+      'appointment_created',
+      'appointment_deleted'
     ]
   },
   targetId: {

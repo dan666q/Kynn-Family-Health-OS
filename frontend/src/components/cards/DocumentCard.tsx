@@ -28,16 +28,33 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, onPress, o
     }
   };
 
+  const getFileUri = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) {
+      return url;
+    }
+    const cleanPath = url.startsWith('/') ? url : `/${url}`;
+    return `http://192.168.2.4:5000${cleanPath}`;
+  };
+
   const typeInfo = getDocTypeInfo(document.type);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-      <Image source={{ uri: document.fileUrl }} style={styles.thumbnail} />
+      <Image source={{ uri: getFileUri(document.fileUrl) }} style={styles.thumbnail} />
       
       <View style={styles.content}>
         <View style={styles.headerRow}>
-          <View style={[styles.typeBadge, { backgroundColor: typeInfo.bg }]}>
-            <Text style={[styles.typeText, { color: typeInfo.color }]}>{typeInfo.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={[styles.typeBadge, { backgroundColor: typeInfo.bg, marginRight: 8 }]}>
+              <Text style={[styles.typeText, { color: typeInfo.color }]}>{typeInfo.label}</Text>
+            </View>
+            {document.isOfflinePending && (
+              <View style={styles.offlineBadge}>
+                <Ionicons name="cloud-offline-outline" size={12} color="#D32F2F" style={{ marginRight: 3 }} />
+                <Text style={styles.offlineText}>Chờ đồng bộ</Text>
+              </View>
+            )}
           </View>
           {onDelete && (
             <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
@@ -130,6 +147,19 @@ const styles = StyleSheet.create({
     fontSize: FONTS.size.caption,
     color: COLORS.textMuted,
     fontFamily: FONTS.family,
+  },
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  offlineText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#D32F2F',
   }
 });
 

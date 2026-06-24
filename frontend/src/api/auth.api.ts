@@ -1,13 +1,13 @@
 import axiosInstance from './axios';
 
 export const authApi = {
-  register: async (email: string, password: string, name: string, avatar?: string) => {
-    const response = await axiosInstance.post('/auth/register', { email, password, name, avatar });
+  register: async (username: string, password: string, name: string, avatar?: string) => {
+    const response = await axiosInstance.post('/auth/register', { username, password, name, avatar });
     return response.data;
   },
 
-  login: async (email: string, password: string) => {
-    const response = await axiosInstance.post('/auth/login', { email, password });
+  login: async (username: string, password: string) => {
+    const response = await axiosInstance.post('/auth/login', { username, password });
     return response.data;
   },
 
@@ -18,6 +18,16 @@ export const authApi = {
 
   logout: async () => {
     const response = await axiosInstance.post('/auth/logout');
+    return response.data;
+  },
+
+  changePassword: async (oldPassword: string, newPassword: string) => {
+    const response = await axiosInstance.post('/auth/change-password', { oldPassword, newPassword });
+    return response.data;
+  },
+
+  forgotPassword: async (username: string, inviteCode: string, newPassword: string) => {
+    const response = await axiosInstance.post('/auth/forgot-password', { username, inviteCode, newPassword });
     return response.data;
   }
 };

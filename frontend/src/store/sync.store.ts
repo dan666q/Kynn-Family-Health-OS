@@ -2,10 +2,20 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import medicationApi from '../api/medication.api';
+import documentApi from '../api/document.api';
+import appointmentApi from '../api/appointment.api';
+import timelineApi from '../api/timeline.api';
 
 export interface SyncItem {
   id: string;
-  action: 'toggle_medication_log' | 'create_medication';
+  action:
+    | 'toggle_medication_log'
+    | 'create_medication'
+    | 'upload_document'
+    | 'delete_document'
+    | 'create_appointment'
+    | 'delete_appointment'
+    | 'log_symptom';
   payload: any;
   createdAt: string;
 }
@@ -29,7 +39,7 @@ export const useSyncStore = create<SyncState & SyncActions>()(
       queue: [],
       isOnline: true,
       isSyncing: false,
-
+      
       addToQueue: (action, payload) => {
         const newItem: SyncItem = {
           id: `sync-${Date.now()}`,
@@ -68,6 +78,36 @@ export const useSyncStore = create<SyncState & SyncActions>()(
               await medicationApi.toggleLog(medicationId, status, timeSlot, dateStr);
             } else if (item.action === 'create_medication') {
               await medicationApi.createMedication(item.payload);
+            } else if (item.action === 'upload_document') {
+              const { memberId, type, fileName, expiryDate, notes, localUri } = item.payload;
+              const formData = new FormData();
+              formData.append('memberId', memberId);
+              formData.append('type', type);
+              formData.append('fileName', fileName);
+              if (expiryDate) formData.append('expiryDate', expiryDate);
+              formData.append('notes', notes || '');
+
+              if (localUri) {
+                const filename = localUri.split('/').pop() || `doc-${Date.now()}`;
+                const fileParts = filename.split('.');
+                const fileType = fileParts.length > 1 ? fileParts.pop() : 'jpeg';
+
+                // @ts-ignore
+                formData.append('file', {
+                  uri: localUri,
+                  name: filename,
+                  type: fileType === 'pdf' ? 'application/pdf' : `image/${fileType}`
+                });
+              }
+              await documentApi.uploadDocument(formData);
+            } else if (item.action === 'delete_document') {
+              await documentApi.deleteDocument(item.payload.id);
+            } else if (item.action === 'create_appointment') {
+              await appointmentApi.createAppointment(item.payload);
+            } else if (item.action === 'delete_appointment') {
+              await appointmentApi.deleteAppointment(item.payload.id);
+            } else if (item.action === 'log_symptom') {
+              await timelineApi.logSymptom(item.payload);
             }
             console.log(`[Sync Store] Successfully synchronized offline action: ${item.action}`);
           } catch (err) {

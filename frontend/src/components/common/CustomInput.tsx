@@ -15,6 +15,7 @@ interface CustomInputProps {
   multiline?: boolean;
   numberOfLines?: number;
   style?: ViewStyle;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }
 
 export const CustomInput: React.FC<CustomInputProps> = ({
@@ -28,6 +29,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
   multiline = false,
   numberOfLines = 1,
   style,
+  autoCapitalize = 'sentences',
 }) => {
   return (
     <View style={[styles.container, style]}>
@@ -47,6 +49,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
         multiline={multiline}
         numberOfLines={numberOfLines}
         textAlignVertical={multiline ? 'top' : 'center'}
+        autoCapitalize={autoCapitalize}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>

@@ -5,6 +5,7 @@ import COLORS from '../../constants/colors';
 import FONTS from '../../constants/fonts';
 import SPACING from '../../constants/spacing';
 import { useFamilyStore } from '../../store/family.store';
+import useAuthStore from '../../store/auth.store';
 import MemberCard from '../../components/cards/MemberCard';
 import CustomButton from '../../components/common/CustomButton';
 import CustomInput from '../../components/common/CustomInput';
@@ -12,6 +13,7 @@ import Header from '../../components/common/Header';
 
 export const FamilyScreen = () => {
   const { currentFamily, members, addMember } = useFamilyStore();
+  const { logout, changePassword, user } = useAuthStore();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -24,6 +26,59 @@ export const FamilyScreen = () => {
   const [contactPhone, setContactPhone] = useState('');
   const [contactRelationship, setContactRelationship] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Change password modal states
+  const [changePwModalVisible, setChangePwModalVisible] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+
+  const handleLogout = () => {
+    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Đăng xuất', style: 'destructive', onPress: async () => {
+          try {
+            await logout();
+          } catch (err) {
+            console.error('Logout failed:', err);
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleChangePasswordSubmit = async () => {
+    if (!oldPassword || !newPassword || !confirmNewPassword) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng điền đầy đủ tất cả các trường.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Lỗi mật khẩu', 'Mật khẩu mới phải dài ít nhất 6 ký tự.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Lỗi mật khẩu', 'Mật khẩu xác nhận mới không trùng khớp.');
+      return;
+    }
+
+    setPwLoading(true);
+    try {
+      await changePassword(oldPassword, newPassword);
+      Alert.alert('Thành công', 'Đổi mật khẩu thành công!');
+      setChangePwModalVisible(false);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.message || 'Mật khẩu cũ không chính xác hoặc xảy ra lỗi kết nối.';
+      Alert.alert('Lỗi đổi mật khẩu', errMsg);
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   const handleShareInvite = async () => {
     try {
@@ -139,7 +194,32 @@ export const FamilyScreen = () => {
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Thành viên ({members.length})</Text>
+        {/* Account settings card */}
+        {user && (
+          <View style={styles.settingsCard}>
+            <Text style={styles.settingsTitle}>Tài khoản: {user.name} ({user.username})</Text>
+            
+            <TouchableOpacity style={styles.settingsRow} onPress={() => setChangePwModalVisible(true)} activeOpacity={0.7}>
+              <View style={styles.settingsRowLeft}>
+                <Ionicons name="key-outline" size={20} color={COLORS.primary} style={{ marginRight: 10 }} />
+                <Text style={styles.settingsRowText}>Đổi mật khẩu tài khoản</Text>
+              </View>
+              <Ionicons name="chevron-forward-outline" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.settingsDivider} />
+
+            <TouchableOpacity style={styles.settingsRow} onPress={handleLogout} activeOpacity={0.7}>
+              <View style={styles.settingsRowLeft}>
+                <Ionicons name="log-out-outline" size={20} color={COLORS.missed} style={{ marginRight: 10 }} />
+                <Text style={[styles.settingsRowText, { color: COLORS.missed }]}>Đăng xuất khỏi app</Text>
+              </View>
+              <Ionicons name="chevron-forward-outline" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>Thành viên gia đình ({members.length})</Text>
 
         {/* Member cards */}
         {members.map(member => (
@@ -183,7 +263,7 @@ export const FamilyScreen = () => {
                 label="Họ và Tên"
                 value={fullName}
                 onChangeText={setFullName}
-                placeholder="Ví dụ: Hoàng Văn Nội..."
+                placeholder="Ví dụ: Nguyễn Văn A..."
               />
 
               {/* Role Chip Selector */}
@@ -255,7 +335,7 @@ export const FamilyScreen = () => {
                 label="Tên Người liên hệ"
                 value={contactName}
                 onChangeText={setContactName}
-                placeholder="Ví dụ: Lê Hoàng Lan"
+                placeholder="Ví dụ: Nguyễn Thị B..."
               />
 
               <CustomInput 
@@ -292,6 +372,61 @@ export const FamilyScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* CHANGE PASSWORD MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={changePwModalVisible}
+        onRequestClose={() => setChangePwModalVisible(false)}
+      >
+        <View style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Đổi Mật Khẩu Tài Khoản</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <CustomInput 
+                label="Mật khẩu hiện tại"
+                value={oldPassword}
+                onChangeText={setOldPassword}
+                placeholder="Nhập mật khẩu đang dùng"
+                secureTextEntry
+              />
+
+              <CustomInput 
+                label="Mật khẩu mới"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="Tối thiểu 6 ký tự"
+                secureTextEntry
+              />
+
+              <CustomInput 
+                label="Xác nhận mật khẩu mới"
+                value={confirmNewPassword}
+                onChangeText={setConfirmNewPassword}
+                placeholder="Nhập lại mật khẩu mới"
+                secureTextEntry
+              />
+
+              <View style={styles.modalButtons}>
+                <CustomButton 
+                  title="Hủy bỏ"
+                  onPress={() => setChangePwModalVisible(false)}
+                  type="outline"
+                  style={styles.halfBtn}
+                />
+                <CustomButton 
+                  title="Cập nhật"
+                  onPress={handleChangePasswordSubmit}
+                  loading={pwLoading}
+                  style={styles.halfBtn}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -310,7 +445,7 @@ const styles = StyleSheet.create({
     borderRadius: SPACING.borderRadiusLg,
     padding: SPACING.lg,
     alignItems: 'center',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     borderWidth: 1.5,
     borderColor: COLORS.border,
     shadowColor: COLORS.primary,
@@ -382,6 +517,42 @@ const styles = StyleSheet.create({
     fontWeight: FONTS.weight.bold,
     color: COLORS.textDark,
     fontFamily: FONTS.family,
+  },
+  // Settings Card UI
+  settingsCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: SPACING.borderRadiusLg,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  settingsTitle: {
+    fontSize: FONTS.size.body,
+    fontWeight: '700',
+    color: COLORS.textDark,
+    fontFamily: FONTS.family,
+    marginBottom: SPACING.sm,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  settingsRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsRowText: {
+    fontSize: FONTS.size.body - 1,
+    fontWeight: '600',
+    color: COLORS.textDark,
+    fontFamily: FONTS.family,
+  },
+  settingsDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
   },
   sectionTitle: {
     fontSize: FONTS.size.title - 2,
@@ -472,4 +643,3 @@ const styles = StyleSheet.create({
 });
 
 export default FamilyScreen;
-

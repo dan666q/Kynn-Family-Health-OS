@@ -1,4 +1,19 @@
-export type ActivityType = 'medication_taken' | 'medication_missed' | 'symptom_log' | 'document_uploaded' | 'voice_note_added' | 'appointment_created';
+export type ActivityType =
+  | 'medication_taken'
+  | 'medication_missed'
+  | 'medication_added'
+  | 'medication_updated'
+  | 'medication_deleted'
+  | 'document_uploaded'
+  | 'document_deleted'
+  | 'symptom_logged'
+  | 'symptom_log'
+  | 'voice_added'
+  | 'voice_note_added'
+  | 'member_created'
+  | 'member_updated'
+  | 'appointment_created'
+  | 'appointment_deleted';
 
 export interface CareActivity {
   id: string;
@@ -13,6 +28,7 @@ export interface CareActivity {
   metadata?: any;     // Extra info
   createdAt: string;  // ISO DateTime
 }
+
 export interface MedicalDocument {
   id: string;
   memberId: string;
@@ -23,4 +39,5 @@ export interface MedicalDocument {
   expiryDate?: string;
   notes?: string;
   createdAt: string;
+  isOfflinePending?: boolean;
 }

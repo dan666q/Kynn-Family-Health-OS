@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
 import FONTS from '../../constants/fonts';
@@ -11,46 +11,106 @@ import CustomButton from '../../components/common/CustomButton';
 import CustomInput from '../../components/common/CustomInput';
 import Header from '../../components/common/Header';
 
+const PRESET_DOCS = [
+  {
+    id: 'preset-presc',
+    label: 'Toa Thuốc Mẫu',
+    fileName: 'Toa thuốc Tim mạch BV Bạch Mai',
+    type: 'toa_thuoc',
+    fileUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600',
+  },
+  {
+    id: 'preset-lab',
+    label: 'Xét Nghiệm Mẫu',
+    fileName: 'Xét nghiệm máu & HbA1c định kỳ',
+    type: 'xet_nghiem',
+    fileUrl: 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?w=600',
+  },
+  {
+    id: 'preset-bhyt',
+    label: 'Thẻ BHYT Mẫu',
+    fileName: 'Thẻ BHYT Hộ gia đình',
+    type: 'bhyt',
+    fileUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600',
+  }
+];
+
 export const DocumentsScreen = () => {
-  const { documents, addDocument, deleteDocument } = useTimelineStore();
+  const { documents, addDocument, deleteDocument, fetchDocuments } = useTimelineStore();
   const { members } = useFamilyStore();
   
   const [selectedType, setSelectedType] = useState<string>('all');
   
   const [modalVisible, setModalVisible] = useState(false);
   const [fileName, setFileName] = useState('');
-  const [docType, setDocType] = useState<'prescription' | 'lab_result' | 'insurance'>('prescription');
-  const [selectedMemberId, setSelectedMemberId] = useState(members[0]?.id || '');
+  const [docType, setDocType] = useState<string>('toa_thuoc');
+  const [selectedMemberId, setSelectedMemberId] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedPresetId, setSelectedPresetId] = useState('preset-presc');
+  const [expiryDate, setExpiryDate] = useState('');
 
-  const handleUploadSimulate = () => {
+  // Fetch documents on mount
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  // Set default member
+  useEffect(() => {
+    if (members.length > 0 && !selectedMemberId) {
+      setSelectedMemberId(members[0].id);
+    }
+  }, [members]);
+
+  const handleSelectPreset = (preset: typeof PRESET_DOCS[0]) => {
+    setSelectedPresetId(preset.id);
+    setFileName(preset.fileName);
+    setDocType(preset.type);
+  };
+
+  const handleUploadSimulate = async () => {
     if (!fileName.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên tài liệu.');
       return;
     }
+    if (!selectedMemberId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn thành viên sở hữu.');
+      return;
+    }
 
-    addDocument({
-      memberId: selectedMemberId,
-      uploadedBy: 'Lê Hoàng Lan',
-      type: docType,
-      fileUrl: docType === 'prescription' 
-        ? 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600' 
-        : 'https://images.unsplash.com/photo-1530026405186-ed1ea0ac7a63?w=600',
-      fileName: fileName.trim(),
-      notes: notes.trim() ? notes : undefined,
-    });
+    const preset = PRESET_DOCS.find(p => p.id === selectedPresetId) || PRESET_DOCS[0];
 
-    setFileName('');
-    setNotes('');
-    setModalVisible(false);
-    
-    Alert.alert('Thành công', 'Đã tải hồ sơ y tế lên và chia sẻ tới gia đình.');
+    try {
+      await addDocument({
+        memberId: selectedMemberId,
+        type: docType,
+        fileName: fileName.trim(),
+        notes: notes.trim(),
+        expiryDate: expiryDate.trim() ? expiryDate : undefined,
+        localUri: preset.fileUrl
+      });
+
+      setFileName('');
+      setNotes('');
+      setExpiryDate('');
+      setModalVisible(false);
+      
+      Alert.alert('Thành công', 'Đã tải hồ sơ y tế lên và chia sẻ tới gia đình.');
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể thêm tài liệu.');
+    }
   };
 
   const handleDelete = (id: string, name: string) => {
     Alert.alert('Xác nhận xóa', `Bạn có chắc muốn xóa tài liệu "${name}" không?`, [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Xóa', style: 'destructive', onPress: () => deleteDocument(id) }
+      { text: 'Xóa', style: 'destructive', onPress: async () => {
+          try {
+            await deleteDocument(id);
+          } catch (err) {
+            Alert.alert('Lỗi', 'Không thể xóa tài liệu.');
+          }
+        } 
+      }
     ]);
   };
 
@@ -79,7 +139,14 @@ export const DocumentsScreen = () => {
         subtitle="Lưu trữ BHYT, CCCD, Toa thuốc & Xét nghiệm"
         rightAction={{
           icon: 'cloud-upload-outline',
-          onPress: () => setModalVisible(true)
+          onPress: () => {
+            // Reset modal state with default preset
+            const defaultPreset = PRESET_DOCS[0];
+            setSelectedPresetId(defaultPreset.id);
+            setFileName(defaultPreset.fileName);
+            setDocType(defaultPreset.type);
+            setModalVisible(true);
+          }
         }}
       />
 
@@ -131,7 +198,7 @@ export const DocumentsScreen = () => {
               key={doc.id} 
               document={doc} 
               onDelete={() => handleDelete(doc.id, doc.fileName)}
-              onPress={() => Alert.alert('Preview Tài Liệu', `Đang xem: ${doc.fileName}\nGhi chú: ${doc.notes || 'Không có'}`)}
+              onPress={() => Alert.alert('Chi tiết Tài Liệu', `Tên: ${doc.fileName}\nNgười tải: ${doc.uploadedBy}\nGhi chú: ${doc.notes || 'Không có'}${doc.expiryDate ? `\nHạn dùng: ${doc.expiryDate}` : ''}`)}
             />
           ))
         )}
@@ -146,7 +213,7 @@ export const DocumentsScreen = () => {
       >
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Tải Lên Hồ Sơ Mới (Demo)</Text>
+            <Text style={styles.modalTitle}>Tải Lên Hồ Sơ Y Khoa</Text>
             
             <ScrollView showsVerticalScrollIndicator={false}>
               
@@ -163,18 +230,46 @@ export const DocumentsScreen = () => {
                     onPress={() => setSelectedMemberId(member.id)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.memberChipText}>{member.fullName.split(' ')[2]}</Text>
+                    <Text style={[
+                      styles.memberChipText,
+                      selectedMemberId === member.id && styles.memberChipTextActive
+                    ]}>{member.fullName}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Document Type Picker */}
-              <Text style={styles.label}>Loại tài liệu</Text>
+              {/* Preset Document Pickers */}
+              <Text style={styles.label}>Chọn tài liệu để tải lên</Text>
+              <View style={styles.presetSelector}>
+                {PRESET_DOCS.map(preset => {
+                  const isSelected = selectedPresetId === preset.id;
+                  return (
+                    <TouchableOpacity
+                      key={preset.id}
+                      style={[
+                        styles.presetCard,
+                        isSelected && styles.presetCardActive
+                      ]}
+                      onPress={() => handleSelectPreset(preset)}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri: preset.fileUrl }} style={styles.presetThumbnail} />
+                      <Text style={[
+                        styles.presetText,
+                        isSelected && styles.presetTextActive
+                      ]} numberOfLines={1}>{preset.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Document Type Selector */}
+              <Text style={styles.label}>Phân loại hệ thống</Text>
               <View style={styles.typeSelector}>
                 {[
-                  { id: 'prescription', label: 'Toa thuốc' },
-                  { id: 'lab_result', label: 'Xét nghiệm' },
-                  { id: 'insurance', label: 'Bảo hiểm' }
+                  { id: 'toa_thuoc', label: 'Toa thuốc' },
+                  { id: 'xet_nghiem', label: 'Xét nghiệm' },
+                  { id: 'bhyt', label: 'BHYT/CCCD' }
                 ].map(type => (
                   <TouchableOpacity
                     key={type.id}
@@ -182,7 +277,7 @@ export const DocumentsScreen = () => {
                       styles.typeChip,
                       docType === type.id && styles.typeChipActive
                     ]}
-                    onPress={() => setDocType(type.id as any)}
+                    onPress={() => setDocType(type.id)}
                     activeOpacity={0.8}
                   >
                     <Text style={[
@@ -198,6 +293,13 @@ export const DocumentsScreen = () => {
                 value={fileName}
                 onChangeText={setFileName}
                 placeholder="Ví dụ: Đơn thuốc định kỳ tim mạch..."
+              />
+
+              <CustomInput 
+                label="Thời hạn sử dụng / Hết hạn (nếu có)"
+                value={expiryDate}
+                onChangeText={setExpiryDate}
+                placeholder="Ví dụ: 2026-12-31"
               />
 
               <CustomInput 
@@ -327,6 +429,7 @@ const styles = StyleSheet.create({
   },
   memberSelector: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginBottom: SPACING.md,
   },
   memberChip: {
@@ -335,6 +438,7 @@ const styles = StyleSheet.create({
     borderRadius: SPACING.borderRadiusSm,
     backgroundColor: COLORS.background,
     marginRight: 8,
+    marginBottom: 8,
     borderWidth: 1.5,
     borderColor: COLORS.border,
   },
@@ -346,6 +450,43 @@ const styles = StyleSheet.create({
     fontSize: FONTS.size.body - 1,
     color: COLORS.textDark,
     fontFamily: FONTS.family,
+  },
+  memberChipTextActive: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  presetSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  presetCard: {
+    width: '31%',
+    backgroundColor: COLORS.background,
+    borderRadius: SPACING.borderRadiusSm,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    padding: 6,
+    alignItems: 'center',
+  },
+  presetCardActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight,
+  },
+  presetThumbnail: {
+    width: '100%',
+    height: 60,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  presetText: {
+    fontSize: 10,
+    color: COLORS.textDark,
+    fontFamily: FONTS.family,
+  },
+  presetTextActive: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   typeSelector: {
     flexDirection: 'row',
@@ -377,6 +518,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: SPACING.lg,
+    paddingBottom: 20
   },
   halfBtn: {
     width: '48%',

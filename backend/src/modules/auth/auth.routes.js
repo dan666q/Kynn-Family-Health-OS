@@ -8,5 +8,8 @@ router.post('/login', authController.login);
 router.get('/me', authMiddleware, authController.getMe);
 router.post('/logout', authMiddleware, authController.logout);
 
-module.exports = router;
+// New Password Management Routes
+router.post('/change-password', authMiddleware, authController.changePassword);
+router.post('/forgot-password', authController.forgotPassword);
 
+module.exports = router;

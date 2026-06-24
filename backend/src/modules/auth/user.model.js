@@ -2,9 +2,9 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  email: {
+  username: {
     type: String,
-    required: [true, 'Email is required'],
+    required: [true, 'Username is required'],
     unique: true,
     lowercase: true,
     trim: true
@@ -22,11 +22,6 @@ const userSchema = new mongoose.Schema({
   avatar: {
     type: String,
     default: ''
-  },
-  provider: {
-    type: String,
-    enum: ['local', 'google'],
-    default: 'local'
   },
   familyId: {
     type: mongoose.Schema.Types.ObjectId,
