@@ -22,6 +22,15 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({ activity, isLast = f
         return { name: 'volume-high' as const, color: COLORS.primary, bg: COLORS.primaryLight };
       case 'document_uploaded':
         return { name: 'document-text' as const, color: '#8E24AA', bg: '#F3E5F5' };
+      case 'document_deleted':
+        return { name: 'trash-outline' as const, color: '#757575', bg: '#F5F5F5' };
+      case 'symptom_logged':
+      case 'symptom_log':
+        return { name: 'thermometer-outline' as const, color: '#D81B60', bg: '#FCE4EC' };
+      case 'appointment_created':
+        return { name: 'calendar' as const, color: '#00897B', bg: '#E0F2F1' };
+      case 'appointment_deleted':
+        return { name: 'calendar-outline' as const, color: '#E53935', bg: '#FFEBEE' };
       default:
         return { name: 'pin' as const, color: COLORS.textMuted, bg: COLORS.border };
     }
@@ -53,7 +62,7 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({ activity, isLast = f
       {/* Right content card */}
       <View style={styles.rightCol}>
         <View style={styles.headerRow}>
-          <Text style={styles.subjectName}>{activity.subjectName}</Text>
+          <Text style={styles.subjectName}>{activity.subjectName || activity.actorName || 'Nhật ký'}</Text>
           <Text style={styles.timeText}>{formatTime(activity.createdAt)}</Text>
         </View>
         

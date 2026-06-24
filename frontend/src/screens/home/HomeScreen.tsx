@@ -48,7 +48,7 @@ export const HomeScreen = ({ navigation }: any) => {
   });
 
   const handleToggleMed = (medicationId: string, slot: string) => {
-    const actorName = user ? `${user.name} (Con gái)` : 'Người chăm sóc';
+    const actorName = user ? user.name : 'Người chăm sóc';
     toggleTaken(medicationId, slot, actorName);
   };
 
@@ -60,7 +60,7 @@ export const HomeScreen = ({ navigation }: any) => {
         <View style={styles.welcomeSection}>
           <View>
             <View style={styles.titleWithIcon}>
-              <Text style={styles.welcomeTitle}>Chào Lan</Text>
+              <Text style={styles.welcomeTitle}>{user ? `Chào ${user.name.split(' ').pop()}` : 'Chào bạn'}</Text>
               <Ionicons name="heart" size={26} color={COLORS.emergency} style={styles.welcomeHeart} />
             </View>
             <Text style={styles.welcomeSubtitle}>Hôm nay mọi việc đều ổn định!</Text>

@@ -7,12 +7,14 @@ import SPACING from '../../constants/spacing';
 import ROUTES from '../../constants/routes';
 import { useMedicationStore } from '../../store/medication.store';
 import { useFamilyStore } from '../../store/family.store';
+import useAuthStore from '../../store/auth.store';
 import MedicationCard from '../../components/cards/MedicationCard';
 import Header from '../../components/common/Header';
 
 export const MedicationScreen = ({ navigation }: any) => {
   const { medications, logs, toggleTaken } = useMedicationStore();
   const { members } = useFamilyStore();
+  const { user } = useAuthStore();
   
   const [selectedMemberId, setSelectedMemberId] = useState<string>('');
 
@@ -20,7 +22,8 @@ export const MedicationScreen = ({ navigation }: any) => {
   const todayStr = getTodayDateString();
 
   const handleToggleMed = (medicationId: string, slot: string) => {
-    toggleTaken(medicationId, slot, 'Lê Hoàng Lan (Con gái)');
+    const checkedBy = user ? `${user.name} (Người chăm sóc)` : 'Người chăm sóc';
+    toggleTaken(medicationId, slot, checkedBy);
   };
 
   const filteredMeds = selectedMemberId

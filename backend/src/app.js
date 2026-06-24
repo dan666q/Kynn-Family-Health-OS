@@ -33,6 +33,8 @@ app.use('/api/v1/members', require('./modules/member/member.routes'));
 app.use('/api/v1/medications', require('./modules/medication/medication.routes'));
 app.use('/api/v1/timeline', require('./modules/timeline/timeline.routes'));
 app.use('/api/v1/voice', require('./modules/voice/voice.routes'));
+app.use('/api/v1/documents', require('./modules/document/document.routes'));
+app.use('/api/v1/appointments', require('./modules/appointment/appointment.routes'));
 
 // Global Error Handler
 app.use(errorMiddleware);

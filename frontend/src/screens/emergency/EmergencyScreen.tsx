@@ -197,7 +197,7 @@ export const EmergencyScreen = () => {
                 label="Họ và Tên"
                 value={contactName}
                 onChangeText={setContactName}
-                placeholder="Ví dụ: Lê Hoàng Lan"
+                placeholder="Ví dụ: Nguyễn Thị B..."
               />
 
               <CustomInput 

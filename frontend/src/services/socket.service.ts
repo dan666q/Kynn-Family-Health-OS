@@ -3,6 +3,7 @@ import useAuthStore from '../store/auth.store';
 import useFamilyStore from '../store/family.store';
 import useMedicationStore from '../store/medication.store';
 import useTimelineStore from '../store/timeline.store';
+import useAppointmentStore from '../store/appointment.store';
 
 let socket: Socket | null = null;
 
@@ -58,6 +59,16 @@ export const socketService = {
     socket.on('timeline_updated', () => {
       console.log('[Socket Event] Timeline updated received. Re-fetching activities...');
       useTimelineStore.getState().fetchActivities().catch(() => {});
+    });
+
+    socket.on('document_updated', () => {
+      console.log('[Socket Event] Document updated received. Re-fetching documents...');
+      useTimelineStore.getState().fetchDocuments().catch(() => {});
+    });
+
+    socket.on('appointment_updated', () => {
+      console.log('[Socket Event] Appointment updated received. Re-fetching appointments...');
+      useAppointmentStore.getState().fetchAppointments().catch(() => {});
     });
 
     socket.on('disconnect', () => {
