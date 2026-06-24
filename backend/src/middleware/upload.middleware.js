@@ -1,15 +1,30 @@
-// Multer file upload middleware placeholder
-module.exports = {
-  single: (fieldName) => {
-    return (req, res, next) => {
-      console.log(`[Upload Middleware] Mocking single file upload for field: ${fieldName}`);
-      req.file = {
-        originalname: 'prescription.pdf',
-        mimetype: 'application/pdf',
-        buffer: Buffer.from('mock-file-content'),
-        size: 1024
-      };
-      next();
-    };
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+const uploadDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+module.exports = {
+  single: (fieldName) => upload.single(fieldName),
+  array: (fieldName, maxCount) => upload.array(fieldName, maxCount),
+  fields: (fields) => upload.fields(fields)
 };
+

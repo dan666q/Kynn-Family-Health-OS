@@ -20,5 +20,6 @@ export interface MedicationLog {
   memberId: string;
   checkedBy: string; // Name of person who checked off (e.g. "Con Gái Lan")
   status: MedicationStatus;
+  timeSlot: string;
   takenAt: string; // ISO DateTime
 }

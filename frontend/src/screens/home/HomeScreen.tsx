@@ -30,7 +30,7 @@ export const HomeScreen = ({ navigation }: any) => {
       const log = logs.find(
         l => l.medicationId === med.id && 
              l.takenAt.startsWith(todayStr) && 
-             (slot === 'Khi khò khè / Khó thở' || new Date(l.takenAt).getUTCHours() === parseInt(slot.split(':')[0]))
+             l.timeSlot === slot
       );
       
       scheduleItems.push({

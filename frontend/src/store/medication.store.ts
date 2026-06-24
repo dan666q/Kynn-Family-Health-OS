@@ -38,9 +38,22 @@ export const useMedicationStore = create<MedicationState & MedicationActions>()(
               ...m,
               id: m._id
             }));
-            set({ medications: mapped });
+            
+            // Retain any offline-created medications still in the sync queue
+            const syncQueue = useSyncStore.getState().queue;
+            const offlineMeds = syncQueue
+              .filter((item) => item.action === 'create_medication')
+              .map((item) => ({
+                ...item.payload,
+                id: item.id,
+                createdAt: item.createdAt
+              }));
+
+            const combined = [...mapped, ...offlineMeds];
+            set({ medications: combined });
+
             // Reschedule local reminders
-            notificationService.scheduleAllMedicationReminders(mapped, useFamilyStore.getState().members).catch(() => {});
+            notificationService.scheduleAllMedicationReminders(combined, useFamilyStore.getState().members).catch(() => {});
           }
         } catch (err) {
           console.log('[Medication Store] Fetch medications failed (offline mode). Using cached state.', err);
@@ -48,14 +61,45 @@ export const useMedicationStore = create<MedicationState & MedicationActions>()(
       },
 
       fetchLogs: async (dateStr) => {
+        const todayStr = dateStr || new Date().toISOString().split('T')[0];
         try {
-          const res = await medicationApi.getLogs(dateStr);
+          const res = await medicationApi.getLogs(todayStr);
           if (res.status === 'success' && res.data) {
             const mapped = res.data.logs.map((l: any) => ({
               ...l,
               id: l._id
             }));
-            set({ logs: mapped });
+
+            // Retain offline toggled logs still in the sync queue
+            const syncQueue = useSyncStore.getState().queue;
+            const offlineLogs = syncQueue
+              .filter((item) => item.action === 'toggle_medication_log')
+              .map((item) => {
+                const { medicationId, status, timeSlot, dateStr: logDate } = item.payload;
+                return {
+                  id: item.id,
+                  medicationId,
+                  memberId: get().medications.find(m => m.id === medicationId)?.memberId || '',
+                  checkedBy: 'Người chăm sóc (Offline)',
+                  status: status as any,
+                  timeSlot,
+                  takenAt: `${logDate}T12:00:00.000Z`
+                };
+              });
+
+            let combinedLogs = [...mapped];
+            offlineLogs.forEach((offLog) => {
+              const existsIndex = combinedLogs.findIndex(
+                (l) => l.medicationId === offLog.medicationId && l.timeSlot === offLog.timeSlot
+              );
+              if (existsIndex === -1) {
+                combinedLogs.push(offLog);
+              } else {
+                combinedLogs.splice(existsIndex, 1);
+              }
+            });
+
+            set({ logs: combinedLogs });
           }
         } catch (err) {
           console.log('[Medication Store] Fetch logs failed (offline mode). Using cached state.', err);
@@ -139,7 +183,9 @@ export const useMedicationStore = create<MedicationState & MedicationActions>()(
 
           // Optimistic UI Update: Toggle confirmation logs state locally
           const existingLog = get().logs.find(
-            (l) => l.medicationId === medicationId && l.takenAt.startsWith(todayStr)
+            (l) => l.medicationId === medicationId && 
+                   l.takenAt.startsWith(todayStr) && 
+                   l.timeSlot === timeSlot
           );
 
           if (existingLog) {
@@ -155,6 +201,7 @@ export const useMedicationStore = create<MedicationState & MedicationActions>()(
               memberId: get().medications.find(m => m.id === medicationId)?.memberId || '',
               checkedBy,
               status: 'taken',
+              timeSlot,
               takenAt: new Date().toISOString()
             };
             set((state) => ({
